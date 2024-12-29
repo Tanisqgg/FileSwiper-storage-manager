@@ -68,7 +68,7 @@ Unknown Files such as videos and other old files can be opened before confirming
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/FileSwiper-storage-manager.git
+   git clone https://github.com/Tanisqgg/FileSwiper-storage-manager.git
    cd modern-file-manager
    ```
 
