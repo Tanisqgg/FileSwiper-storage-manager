@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Old Files Manager</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+  <!-- Center the UI both vertically and horizontally -->
+  <div class="min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-4xl p-4">
+      <!-- Header -->
+      <header class="mb-8">
+        <h1 class="text-4xl font-bold text-center text-gray-800">Old Files Manager</h1>
+        <p class="text-center text-gray-600 mt-2">Clean up your system with ease!</p>
+      </header>
+
+      <!-- Scan Settings Section -->
+      <section class="bg-white rounded-lg shadow p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-4">Scan Settings</h2>
+        <form id="scan-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label for="directory" class="block text-gray-700 font-medium">Directory Path</label>
+            <input type="text" id="directory" name="directory" placeholder="e.g., C:\Users\tanis" class="mt-1 block w-full border border-gray-300 rounded-md p-2" />
+            <p id="warning-msg" class="mt-1 text-sm text-red-500 hidden">
+              Warning: Scanning the entire C:\ drive may lead to errors. Please specify a narrower directory.
+            </p>
+          </div>
+          <div>
+            <label for="days-unused" class="block text-gray-700 font-medium">Days Unused</label>
+            <input type="number" id="days-unused" name="days-unused" value="365" class="mt-1 block w-full border border-gray-300 rounded-md p-2" />
+          </div>
+          <div class="flex items-end">
+            <button type="submit" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200">
+              Scan Files
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Results Section -->
+      <section id="results" class="bg-white rounded-lg shadow p-6 hidden">
+        <h2 class="text-2xl font-semibold mb-4">Scan Results</h2>
+        <!-- Duplicate Files -->
+        <div id="duplicates" class="mb-6">
+          <h3 class="text-xl font-medium mb-2">Duplicate Files</h3>
+          <div id="duplicates-list" class="space-y-4">
+            <!-- Duplicate file cards will be injected here -->
+          </div>
+        </div>
+        <!-- Old Files Table -->
+        <div id="files">
+          <h3 class="text-xl font-medium mb-2">Old Files</h3>
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">File</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size (MB)</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Accessed</th>
+                  <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="files-list" class="bg-white divide-y divide-gray-200">
+                <!-- File rows will be injected here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- JavaScript to connect with the Flask API -->
+  <script>
+    const scanForm = document.getElementById('scan-form');
+    const resultsSection = document.getElementById('results');
+    const filesList = document.getElementById('files-list');
+    const duplicatesList = document.getElementById('duplicates-list');
+    const directoryInput = document.getElementById('directory');
+    const warningMsg = document.getElementById('warning-msg');
+
+    // Show a warning if the user enters the root directory
+    directoryInput.addEventListener('input', function() {
+      const value = directoryInput.value.trim();
+      if (value === "C:\\" || value === "C:/" || value.toLowerCase() === "c:\\" || value.toLowerCase() === "c:/") {
+        warningMsg.classList.remove('hidden');
+      } else {
+        warningMsg.classList.add('hidden');
+      }
+    });
+
+    scanForm.addEventListener('submit', async function(event) {
+      event.preventDefault();
+
+      const directory = directoryInput.value.trim() || 'C:\\';
+      const daysUnused = document.getElementById('days-unused').value || 365;
+
+      const response = await fetch('/api/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ directory, days_unused: daysUnused })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        resultsSection.classList.remove('hidden');
+
+        // Render duplicate files
+        duplicatesList.innerHTML = '';
+        data.duplicates.forEach(duplicate => {
+          const dupDiv = document.createElement('div');
+          dupDiv.className = "border border-gray-200 rounded p-4";
+          dupDiv.innerHTML = `
+            <h4 class="font-semibold">File: ${duplicate.file_name} (${(duplicate.size / (1024 * 1024)).toFixed(2)} MB)</h4>
+            <p class="mt-1">Copies found: ${duplicate.copies.length}</p>
+            <div class="mt-2 space-x-2">
+              <button class="bg-green-500 hover:bg-green-600 text-white py-1 px-3 rounded" onclick="handleDuplicateAction('${duplicate.file_name}', 'keep')">Keep All</button>
+              <button class="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded" onclick="handleDuplicateAction('${duplicate.file_name}', 'delete')">Delete All</button>
+              <button class="bg-yellow-500 hover:bg-yellow-600 text-white py-1 px-3 rounded" onclick="handleDuplicateAction('${duplicate.file_name}', 'selective')">Selective</button>
+            </div>
+          `;
+          duplicatesList.appendChild(dupDiv);
+        });
+
+        // Render old files
+        filesList.innerHTML = '';
+        data.old_files.forEach(file => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap">${file.file_path}</td>
+            <td class="px-6 py-4 whitespace-nowrap">${(file.size / (1024 * 1024)).toFixed(2)}</td>
+            <td class="px-6 py-4 whitespace-nowrap">${file.last_accessed}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-center space-x-2">
+              <button class="bg-blue-500 hover:bg-blue-600 text-white py-1 px-3 rounded" onclick="openFile('${file.file_path}')">Open</button>
+              <button class="bg-red-500 hover:bg-red-600 text-white py-1 px-3 rounded" onclick="deleteFile('${file.file_path}')">Delete</button>
+            </td>
+          `;
+          filesList.appendChild(row);
+        });
+      } else {
+        const errorData = await response.json();
+        alert('Error scanning files: ' + (errorData.error || response.statusText));
+      }
+    });
+
+    async function deleteFile(filePath) {
+      const response = await fetch('/api/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath })
+      });
+      if (response.ok) {
+        alert('File deleted successfully');
+      } else {
+        const errorData = await response.json();
+        alert('Error deleting file: ' + (errorData.error || response.statusText));
+      }
+    }
+
+    async function openFile(filePath) {
+      alert('Open file: ' + filePath);
+    }
+
+    function handleDuplicateAction(fileName, action) {
+      alert(`Action '${action}' selected for duplicate file: ${fileName}`);
+    }
+  </script>
+</body>
+</html>
